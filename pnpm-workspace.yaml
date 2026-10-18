@@ -1,0 +1,16 @@
+# Build-script policy for the dev toolchain.
+#
+# pnpm 11 defaults `strictDepBuilds` to true, which turns any dependency whose
+# postinstall was skipped into a hard install failure. esbuild is the one that
+# genuinely needs its postinstall (vitest runs on its platform binary); the other
+# two are transitive deps of the pi-ai adapter used only by the contract test.
+strictDepBuilds: false
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - '@google/genai'
+  - protobufjs
+allowBuilds:
+  '@google/genai': set this to true or false
+  esbuild: set this to true or false
+  protobufjs: set this to true or false

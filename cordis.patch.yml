@@ -1,0 +1,12 @@
+# The dsh-autofill-model-metadata bundle patch: one insert row mounting the plugin.
+#
+# The plugin is host-only: it reads the models.dev catalog, resolves the explicit
+# provider/model mapping the config declares and writes the resulting capability
+# fields into the llm-pi-ai settings section. The profile's own
+# cordis.patch.yml can override this row by id.
+#
+# The default config is intentionally inert: an empty `mapping` means "no route
+# is mapped", so nothing is written until the operator declares one.
+- insert:
+    - id: dsh-autofill-model-metadata
+      name: dsh-autofill-model-metadata

@@ -1,0 +1,6 @@
+node_modules/
+*.tgz
+.DS_Store
+*.log
+# ad-hoc re-signed node used to run vitest under the DSH runtime (see README)
+.devnode/

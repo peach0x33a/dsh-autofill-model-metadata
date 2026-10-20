@@ -254,7 +254,8 @@ The workflow uses npm Trusted Publishing (OIDC, `id-token: write`), so no
 package that does not exist yet, so the first release has to be published once
 from a logged-in machine (`npm login && npm publish`); afterwards attach the
 publisher at the package's npm *Settings → Trusted publishing* page with this
-repository and `release.yml`, and later tags publish without a token.
+repository and `release.yml`, and later tags publish without a token. The publish
+step skips versions already on the registry, so re-pushing a tag is safe.
 
 ## Limitations
 

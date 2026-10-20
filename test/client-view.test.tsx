@@ -206,6 +206,21 @@ describe('MetadataView', () => {
     expect(html).toContain('step-3.7-flash')
   })
 
+  it('explains an unmapped-only view that has nothing left to show', () => {
+    // With every row mapped, every route card filters itself out; without a
+    // page-level placeholder the column would be blank whitespace.
+    const draft: Mapping = {
+      'my-gateway': {
+        'gemini-3.8-flash': 'google/gemini-3.8-flash',
+        'step-3.7-flash': 'stepfun/step-3.7-flash',
+        'deepseek/deepseek-v4.1-flash': 'deepseek/deepseek-flash',
+      },
+    }
+    const html = render({ draft, unmappedOnly: true })
+    expect(html).toContain('没有未映射的模型')
+    expect(html).not.toContain('my-gateway')
+  })
+
   it('shows a dry run, a save result, and the footer actions', () => {
     const html = render({
       dirty: true,

@@ -195,6 +195,8 @@ const PAGE_CSS = `
 .dsh-af-orphan{display:inline-flex;align-items:center;gap:2px;padding:1px 2px 1px 6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-xs)}
 .dsh-af-orphanKey{color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11px;line-height:16px;overflow-wrap:anywhere}
 .dsh-af-empty{margin:0;padding:24px 0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px;text-align:center}
+.dsh-af-emptyState{display:flex;flex-direction:column;align-items:center;gap:6px;padding:26px 16px;border:.5px dashed var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-xl);color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px;text-align:center}
+.dsh-af-emptyStateIcon{display:inline-flex;color:var(--dsw-alias-label-caption)}
 .dsh-af-emptyInline{margin:0;padding:0 14px 12px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 .dsh-af-footer{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0;margin-top:4px;padding-top:12px;border-top:.5px solid var(--dsw-alias-border-l2)}
 .dsh-af-footerInfo{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;flex:1 1 240px;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
@@ -664,6 +666,12 @@ export function MetadataView(props: ViewProps): ReactNode {
     : coverage.unmapped > 0 || coverage.blockedRoutes > 0
       ? 'warn'
       : 'ok'
+  // The route cards filter their own rows but do not own the page-level empty
+  // state: with "unmapped only" on and nothing unmapped, every card disappears
+  // and the page would otherwise show a blank column.
+  const visibleCards = props.unmappedOnly
+    ? props.cards.filter((card) => card.rows.some((row) => row.source === undefined))
+    : props.cards
 
   return (
     <div className="dsh-af-page">
@@ -742,9 +750,17 @@ export function MetadataView(props: ViewProps): ReactNode {
 
       {props.loading && props.cards.length === 0 ? <p className="dsh-af-empty">{t('loading')}</p> : null}
       {!props.loading && props.cards.length === 0 ? <p className="dsh-af-empty">{t('noRoutes')}</p> : null}
+      {!props.loading && props.cards.length > 0 && visibleCards.length === 0 ? (
+        <div className="dsh-af-emptyState" role="status">
+          <span className="dsh-af-emptyStateIcon" aria-hidden="true">
+            <IconCheck />
+          </span>
+          <span>{t('noUnmapped')}</span>
+        </div>
+      ) : null}
 
       <div className="dsh-af-groups">
-        {props.cards.map((card) => (
+        {visibleCards.map((card) => (
           <RouteSection
             key={card.route}
             card={card}

@@ -47,11 +47,13 @@ const SAVED: Mapping = {
   'my-gateway': { 'gemini-3.8-flash': 'google/gemini-3.8-flash', 'typo-key': 'openai/gpt-4o' },
 }
 
-/** The enclosing tag of the first element whose text is `label`. */
-function tagAround(html: string, label: string): string {
+/** The opening tag of the button whose text is `label`. */
+function buttonAround(html: string, label: string): string {
   const at = html.indexOf(label)
-  if (at === -1) throw new Error(`no element contains ${label}`)
-  return html.slice(html.lastIndexOf('<', at), html.indexOf('>', at) + 1)
+  if (at === -1) throw new Error(`no button contains ${label}`)
+  const start = html.lastIndexOf('<button', at)
+  if (start === -1) throw new Error(`no button contains ${label}`)
+  return html.slice(start, html.indexOf('>', start) + 1)
 }
 
 /** Render the view with sensible defaults, overridden per test. */
@@ -77,9 +79,11 @@ function render(overrides: Partial<ViewProps> & { draft?: Mapping } = {}): strin
     onReload: () => undefined,
     onInspect: () => undefined,
     onApplyAll: () => undefined,
+    onApplyRoute: () => undefined,
     onToggleUnmappedOnly: () => undefined,
     onEdit: () => undefined,
     onSearch: () => undefined,
+    onCloseSearch: () => undefined,
     onPick: () => undefined,
     onClear: () => undefined,
     onRemoveOrphan: () => undefined,
@@ -102,8 +106,12 @@ describe('MetadataView', () => {
   it('shows the mapping in an editable field and what a pass would fill', () => {
     const html = render()
     expect(html).toContain('value="google/gemini-3.8-flash"')
-    expect(html).toContain('contextWindow: 1048576')
-    expect(html).toContain('maxTokens: 65536')
+    // The preview renders one chip per field, with token budgets in their short
+    // form rather than raw numbers.
+    expect(html).toContain('contextWindow')
+    expect(html).toContain('1M')
+    expect(html).toContain('maxTokens')
+    expect(html).toContain('66K')
     // Declared fields are listed, so the operator can see what is protected.
     expect(html).toContain('name')
   })
@@ -226,7 +234,7 @@ describe('MetadataView', () => {
     // "Fill now" runs the *saved* mapping, so letting it fire with a draft on
     // screen would apply something other than what the operator sees; the
     // save-and-fill button is the one that carries the edits.
-    expect(tagAround(render({ dirty: true, draft: {} }), '立即填充')).toContain('disabled')
-    expect(tagAround(render(), '立即填充')).not.toContain('disabled')
+    expect(buttonAround(render({ dirty: true, draft: {} }), '立即填充')).toContain('disabled')
+    expect(buttonAround(render(), '立即填充')).not.toContain('disabled')
   })
 })

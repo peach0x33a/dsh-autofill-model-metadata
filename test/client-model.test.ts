@@ -4,10 +4,12 @@ import { COPY_NS, en, fallbackFor, interpolate, makeT, zh } from '../src/client/
 import { platformTranslator } from './stubs/locale.ts'
 import {
   adoptDraft,
+  candidateDetail,
   cardsFor,
   coverageOf,
   describeCandidate,
   describeFilled,
+  describeFilledFields,
   formatFetchedAt,
   formatTokens,
   rowKey,
@@ -17,6 +19,7 @@ import {
   stateTone,
   summarizePass,
   summaryParts,
+  summaryTone,
   withSource,
   type Mapping,
 } from '../src/client/model.ts'
@@ -261,13 +264,30 @@ describe('coverage', () => {
 
   it('describes a candidate with its budget and levels', () => {
     expect(describeCandidate(CANDIDATE)).toBe('openai/gpt-5.4 · GPT-5.4 · ctx 1M · out 128K · low/medium/high')
+    expect(candidateDetail(CANDIDATE)).toBe('GPT-5.4 · ctx 1M · out 128K · low/medium/high')
     expect(describeCandidate({ ...CANDIDATE, usable: false, problem: 'tool_call=false' })).toContain('✗ tool_call=false')
     expect(describeCandidate({ source: 'a/b', provider: 'a', model: 'b', toolCall: false, usable: false })).toBe('a/b')
   })
 
+  it('splits filled fields into label and value for the chips', () => {
+    expect(describeFilledFields({ contextWindow: 65536, name: 'GPT-5.4' })).toEqual([
+      { field: 'contextWindow', value: '66K' },
+      { field: 'name', value: 'GPT-5.4' },
+    ])
+  })
+
+  it('gives each route summary the tone its state means', () => {
+    expect(summaryTone('summaryUnchanged')).toBe('ok')
+    expect(summaryTone('summaryMapped')).toBe('info')
+    expect(summaryTone('summaryUnmapped')).toBe('warn')
+    expect(summaryTone('summaryInvalid')).toBe('bad')
+    expect(summaryTone('summaryFilled')).toBe('info')
+    expect(summaryTone('summaryModels')).toBe('neutral')
+  })
+
   it('renders filled fields compactly, including inherited levels', () => {
     expect(describeFilled({ contextWindow: 200000, input: ['text', 'image'] })).toEqual([
-      'contextWindow: 200000',
+      'contextWindow: 200K',
       'input: text+image',
     ])
     expect(describeFilled({ reasoningEfforts: { low: 'low', high: null } })).toEqual([

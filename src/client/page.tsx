@@ -186,6 +186,11 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
     (route: string, modelId: string, source: string): void => {
       edit(route, modelId, source)
       const key = `${route}\u0000${modelId}`
+      const pending = timers.current[key]
+      if (pending !== undefined) {
+        clearTimeout(pending)
+        delete timers.current[key]
+      }
       setSearches((current) => ({ ...current, [key]: { query: source, open: false, loading: false, candidates: [] } }))
     },
     [edit],
@@ -236,21 +241,38 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
     [draft, revision, translate],
   )
 
-  /** Run a pass over the saved mapping. */
-  const applyAll = useCallback(async (): Promise<void> => {
-    setSaving(true)
-    setError(undefined)
-    setMessage(undefined)
-    try {
-      const answer = await applyNow(globalFetch)
-      if (answer.routes !== undefined) setReports(answer.routes)
-      setMessage(answer.log.length === 0 ? translate('applied') : answer.log.join(' | '))
-    } catch (failure) {
-      setError(explain(failure))
-    } finally {
-      setSaving(false)
+  /** Close one row's picker without choosing a record. */
+  const closeSearch = useCallback((route: string, modelId: string): void => {
+    const key = `${route}\u0000${modelId}`
+    const existing = timers.current[key]
+    if (existing !== undefined) {
+      clearTimeout(existing)
+      delete timers.current[key]
     }
-  }, [translate])
+    setSearches((current) => ({
+      ...current,
+      [key]: { query: current[key]?.query ?? '', open: false, loading: false, candidates: [] },
+    }))
+  }, [])
+
+  /** Run a pass over the saved mapping: every route, or just one. */
+  const runPass = useCallback(
+    async (route?: string): Promise<void> => {
+      setSaving(true)
+      setError(undefined)
+      setMessage(undefined)
+      try {
+        const answer = await applyNow(globalFetch, route)
+        if (answer.routes !== undefined) setReports(answer.routes)
+        setMessage(answer.log.length === 0 ? translate('applied') : answer.log.join(' | '))
+      } catch (failure) {
+        setError(explain(failure))
+      } finally {
+        setSaving(false)
+      }
+    },
+    [translate],
+  )
 
   const cards = useMemo(() => cardsFor(reports, draft, saved), [reports, draft, saved])
   const coverage = useMemo(
@@ -285,10 +307,12 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
       searches={searches}
       onReload={() => void load()}
       onInspect={() => void load()}
-      onApplyAll={() => void applyAll()}
+      onApplyAll={() => void runPass()}
+      onApplyRoute={(route) => void runPass(route)}
       onToggleUnmappedOnly={() => setUnmappedOnly((current) => !current)}
       onEdit={edit}
       onSearch={search}
+      onCloseSearch={closeSearch}
       onPick={pick}
       onClear={(route, modelId) => edit(route, modelId, '')}
       onRemoveOrphan={(route, key) => edit(route, key, '')}

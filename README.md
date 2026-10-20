@@ -211,13 +211,17 @@ with the same seeded modules the shell provides.
 | host | `src/index.ts` | `lib/index.mjs` (ESM) | the DSH Loader, via the `cordis.patch.yml` row |
 | browser | `src/client/index.tsx` | `lib/client.js` (CJS + `window.__ModuleLoader__` banner) | the Web shell, via `dsh.client` in `package.json` |
 
-`react`, `react/jsx-runtime` and `@deepseek-ai/dsh-client-ui-primitives` are
-external and resolved by the shell's module seed — bundling a second React would
-break hooks. The bundle id must stay the package name: it is the cache key the
-loader serves at `/plugins/<package>/client.js`.
+`react` and `react/jsx-runtime` are external and resolved by the shell's module
+seed — bundling a second React would break hooks. The page deliberately imports
+no Harness Client package: shared UI modules change without notice, so it carries
+its own controls (buttons, tags, checkbox, inputs) styled only with
+`--dsw-alias-*` theme tokens, matching the shipped settings pages. The bundle id
+must stay the package name: it is the cache key the loader serves at
+`/plugins/<package>/client.js`.
 
 Client-only changes need the shell to re-read the bundle: a rebuild is enough
-while the client-plugin HMR receiver is active, otherwise restart DSH Desktop.
+while the client-plugin HMR receiver is active, otherwise reload the page (the
+loader cache-busts on the bundle's revision), or restart DSH Desktop.
 
 ### macOS: vitest cannot start under the DSH runtime node
 

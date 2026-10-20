@@ -206,4 +206,51 @@ describe('MetadataPage', () => {
     await waitFor(() => expect(calls.filter((call) => call.url.endsWith('/status')).length).toBeGreaterThan(1))
     expect(screen.getByDisplayValue('openai/gpt-4o')).toBeTruthy()
   })
+
+  it('applies one route from its card, using the route-scoped endpoint', async () => {
+    // A complete route is the one case where a per-card pass does something, so
+    // this is where the card action is worth proving: it must send the route,
+    // not run the whole table.
+    const complete: ReportedRoute = {
+      ...REPORT,
+      counts: { models: 2, mapped: 0, filled: 2, unchanged: 0, unmapped: 0, invalid: 0 },
+      models: [
+        { id: 'a', declared: [], source: 'openai/gpt-5.4', state: 'filled', filled: { name: 'GPT-5.4' } },
+        { id: 'b', declared: [], source: 'openai/gpt-4o', state: 'filled', filled: { name: 'GPT-4o' } },
+      ],
+    }
+    const mapping = { gw: { a: 'openai/gpt-5.4', b: 'openai/gpt-4o' } }
+    const { calls } = mount({
+      status: { ok: true, revision: 3, mapping, reports: [complete] },
+      inspect: { ok: true, revision: 3, resolved: true, mapping, reports: [complete] },
+      apply: { ok: true, results: [], log: ['gw: would apply (b: name)'], routes: [complete] },
+    })
+
+    await waitFor(() => expect(screen.getByText('填充此路由')).toBeTruthy())
+    await act(async () => {
+      screen.getByText('填充此路由').click()
+    })
+    await waitFor(() => {
+      const posted = calls.find((call) => call.url.endsWith('/apply'))
+      expect(posted?.body).toContain('"route":"gw"')
+    })
+  })
+
+  it('closes the picker without changing the mapping', async () => {
+    mount({
+      status: { ok: true, revision: 1, mapping: { gw: { a: 'openai/gpt-5.4' } }, reports: [REPORT] },
+      inspect: { ok: true, revision: 1, resolved: true, mapping: { gw: { a: 'openai/gpt-5.4' } }, reports: [REPORT] },
+    })
+
+    await waitFor(() => expect(screen.getAllByLabelText('搜索').length).toBeGreaterThan(0))
+    await act(async () => {
+      screen.getAllByLabelText('搜索')[0].click()
+    })
+    await waitFor(() => expect(screen.getByText('取消')).toBeTruthy())
+    await act(async () => {
+      screen.getByText('取消').click()
+    })
+    await waitFor(() => expect(screen.queryByText('取消')).toBeNull())
+  })
+
 })

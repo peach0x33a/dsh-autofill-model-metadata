@@ -3,7 +3,7 @@
  *
  * This is the contract test for the client half: it runs `lib/client.js` in a
  * fresh VM context with a stub `window.__ModuleLoader__`, hands the factory the
- * same three seeded modules the shell seeds, and then mounts the result against
+ * same two seeded modules the shell seeds, and then mounts the result against
  * a stub client context. It fails if the banner, the id, the export shape, the
  * slot registration or the host check-in ever drift.
  *
@@ -19,7 +19,6 @@ import * as jsxRuntime from 'react/jsx-runtime'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { Button } from './stubs/primitives.tsx'
 import { platformTranslator } from './stubs/locale.ts'
 
 const BUNDLE = fileURLToPath(new URL('../lib/client.js', import.meta.url))
@@ -53,15 +52,19 @@ interface Loaded {
   calls: Array<{ url: string; init?: RequestInit }>
 }
 
-/** The modules the shell's static seed resolves for this bundle. */
+/**
+ * The modules the shell's static seed resolves for this bundle.
+ *
+ * There are exactly two: React and the JSX runtime. The page renders its own
+ * controls on purpose, so a `require` for any Harness Client package would be a
+ * regression and throws here.
+ */
 function seeded(specifier: string): unknown {
   switch (specifier) {
     case 'react':
       return React
     case 'react/jsx-runtime':
       return jsxRuntime
-    case '@deepseek-ai/dsh-client-ui-primitives':
-      return { Button }
     default:
       throw new Error(`the bundle required an unseeded module: ${specifier}`)
   }
@@ -230,4 +233,50 @@ describe('the built client bundle', () => {
     expect(html).toContain('模型元数据补齐')
     expect(html).toContain('载入中…')
   })
+
+  it('tears its locale dictionaries down with the plugin, so a reload can re-register them', () => {
+    if (loaded === undefined) return expect(BUNDLE).toBe('built')
+    // Registering the same (namespace, locale) twice throws. A hot reload
+    // disposes the old entry and applies the new bundle in the same page, so the
+    // effect must hand its disposer back: without it the dictionaries outlive
+    // their plugin and the second apply throws, silently dropping the settings
+    // entry until the whole page is reloaded.
+    const registered = new Map<string, Set<string>>()
+    const disposers: Array<() => void> = []
+    const ctx = {
+      effect: (callback: () => void | (() => void)) => {
+        const dispose = callback()
+        if (typeof dispose === 'function') disposers.push(dispose)
+      },
+      locale: {
+        register: (ns: string, dicts: Record<string, unknown>) => {
+          const locales = registered.get(ns) ?? new Set<string>()
+          registered.set(ns, locales)
+          for (const locale of Object.keys(dicts)) {
+            if (locales.has(locale)) throw new Error(`locale namespace "${ns}" already has locale "${locale}"`)
+            locales.add(locale)
+          }
+          return () => {
+            for (const locale of Object.keys(dicts)) locales.delete(locale)
+          }
+        },
+        bind: () => undefined,
+      },
+      slots: {
+        inject: (_slot: string, callback: () => unknown) => callback(),
+        register: () => () => undefined,
+      },
+    }
+
+    loaded.plugin.apply(ctx)
+    // The locale effect must hand back the service's disposer; without one the
+    // registration outlives the plugin entry. (The duplicate-registration guard
+    // below keeps the page alive, so the throw alone cannot prove this.)
+    expect(disposers.length).toBeGreaterThan(0)
+    // What the hot-reload queue does before importing the rebuilt bundle.
+    for (const dispose of [...disposers]) dispose()
+    expect(() => loaded.plugin.apply(ctx)).not.toThrow()
+    expect([...(registered.get('autofillModelMetadata') ?? [])].sort()).toEqual(['en', 'zh'])
+  })
+
 })

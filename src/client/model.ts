@@ -236,6 +236,23 @@ export type SummaryKey =
   | 'summaryInvalid'
   | 'summaryModels'
 
+/** The tag tone of a route summary, matching what the state means. */
+export function summaryTone(key: SummaryKey): 'ok' | 'info' | 'warn' | 'bad' | 'neutral' {
+  switch (key) {
+    case 'summaryFilled':
+    case 'summaryMapped':
+      return 'info'
+    case 'summaryUnchanged':
+      return 'ok'
+    case 'summaryUnmapped':
+      return 'warn'
+    case 'summaryInvalid':
+      return 'bad'
+    default:
+      return 'neutral'
+  }
+}
+
 /** What the draft mapping amounts to, counted across every card. */
 export interface Coverage {
   models: number
@@ -326,7 +343,19 @@ export function formatTokens(value: unknown): string | undefined {
 
 /** The one-line description of a candidate in the picker. */
 export function describeCandidate(candidate: Candidate): string {
-  const bits: string[] = [candidate.source]
+  return [candidate.source, candidateDetail(candidate)].filter((part) => part.length > 0).join(' · ')
+}
+
+/**
+ * The candidate's facts without its mapping source.
+ *
+ * The picker shows the source on its own line and this underneath it, so the
+ * two are formatted separately instead of splitting a finished string.
+ *
+ * @param candidate - one catalog record offered as a mapping target.
+ */
+export function candidateDetail(candidate: Candidate): string {
+  const bits: string[] = []
   if (candidate.name !== undefined && candidate.name !== candidate.model) bits.push(candidate.name)
   const context = formatTokens(candidate.contextWindow)
   const output = formatTokens(candidate.maxTokens)
@@ -337,9 +366,38 @@ export function describeCandidate(candidate: Candidate): string {
   return bits.join(' · ')
 }
 
-/** One line per filled field, for the preview under a row. */
+/** One field a pass would fill, split into label and rendered value. */
+export interface FilledField {
+  field: string
+  value: string
+}
+
+/** One line per filled field, for tests and plain-text callers. */
 export function describeFilled(filled: Record<string, unknown>): string[] {
-  return Object.entries(filled).map(([field, value]) => `${field}: ${summarizeValue(value)}`)
+  return describeFilledFields(filled).map(({ field, value }) => `${field}: ${value}`)
+}
+
+/**
+ * The fields a pass would fill, as label/value pairs.
+ *
+ * The page renders these as chips, so the value is already the compact form:
+ * token budgets become `1M`/`66K` like the candidate picker shows them, arrays
+ * join with `+`, and nested reasoning maps render as `low→high`. Keeping the
+ * split out of the copy lets the view style the label and value differently
+ * without re-parsing a finished string.
+ *
+ * @param filled - the host's per-model field preview.
+ */
+export function describeFilledFields(filled: Record<string, unknown>): FilledField[] {
+  return Object.entries(filled).map(([field, value]) => ({ field, value: filledValue(field, value) }))
+}
+
+/** Render one filled value compactly, formatting token budgets as tokens. */
+function filledValue(field: string, value: unknown): string {
+  if (typeof value === 'number' && (field === 'contextWindow' || field === 'maxTokens')) {
+    return formatTokens(value) ?? String(value)
+  }
+  return summarizeValue(value)
 }
 
 /** Render one filled value compactly. */
@@ -390,7 +448,9 @@ export function stateTone(state: ModelRow['state']): 'ok' | 'info' | 'warn' | 'b
     case 'invalid':
       return 'bad'
     case 'mapped':
-      return 'ok'
+      // Mapping present but unverified: a pass has not confirmed the catalog
+      // record, so this is information, not success.
+      return 'info'
     default:
       return 'warn'
   }

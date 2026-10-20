@@ -8,21 +8,21 @@
  *
  * **Browser half** — the DSH client contract, taken verbatim from the shipped
  * client bundles: a CJS module wrapped in `window.__ModuleLoader__.load({ id,
- * factory })`, whose factory returns the cordis plugin shape. `react` and the
- * shared UI packages are resolved through the loader's own `require` and must
- * therefore stay external — bundling a second React would break hooks. The
- * banner/footer are the wrapper the loader expects; without them the module
- * loads but never registers.
+ * factory })`, whose factory returns the cordis plugin shape. `react` and
+ * `react/jsx-runtime` are resolved through the loader's own `require` and must
+ * therefore stay external — bundling a second React would break hooks, and the
+ * page deliberately imports no other Harness Client package. The banner/footer
+ * are the wrapper the loader expects; without them the module loads but never
+ * registers.
  */
 
-/** Modules the loader resolves for a client bundle. */
-const LOADER_PROVIDED = [
-  'react',
-  'react/jsx-runtime',
-  'react-dom',
-  '@deepseek-ai/dsh-client-store',
-  '@deepseek-ai/dsh-client-ui-primitives',
-]
+/**
+ * Modules the loader resolves for a client bundle. The bundle deliberately
+ * imports no Harness Client package: a shared UI module changes without notice
+ * and a throwing component blanks the slot entry, so the page carries its own
+ * controls styled with `--dsw-alias-*` theme tokens instead.
+ */
+const LOADER_PROVIDED = ['react', 'react/jsx-runtime']
 
 export default [
   {

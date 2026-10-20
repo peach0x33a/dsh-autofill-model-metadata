@@ -95,10 +95,29 @@ export function apply(ctx: ClientContext): void {
   let t = makeT(undefined, table)
   if (ctx.locale?.register !== undefined) {
     // Registering the same (namespace, locale) twice throws, so it happens once
-    // inside an effect, the way every shipped client plugin does it.
-    ctx.effect?.(() => {
-      ctx.locale?.register?.(COPY_NS, { zh, en })
-    }, `${name}: dictionaries`)
+    // inside an effect — and the effect returns the locale service's disposer.
+    // The returned disposer is what makes a hot reload work: the old plugin
+    // entry is torn down (removing its dictionaries) before this one is applied,
+    // so the second registration would otherwise throw and leave the settings
+    // entry unregistered until the page itself was reloaded.
+    //
+    // The registration is also allowed to fail without taking the page down: a
+    // previous instance that a hot reload could not dispose can still own this
+    // namespace. The bound translator keeps answering from it, and the page's
+    // own `makeT` falls back to the bundled dictionary for keys it does not
+    // carry, so the settings entry stays usable.
+    ctx.effect?.(
+      () => {
+        try {
+          const dispose = ctx.locale?.register?.(COPY_NS, { zh, en })
+          return typeof dispose === 'function' ? (dispose as () => void) : undefined
+        } catch (failure) {
+          ctx.logger?.warn?.(`${name}: locale dictionaries not re-registered`, failure)
+          return undefined
+        }
+      },
+      `${name}: dictionaries`,
+    )
     const bound = ctx.locale.bind?.(COPY_NS)
     if (bound !== undefined) t = makeT(bound, table)
   }

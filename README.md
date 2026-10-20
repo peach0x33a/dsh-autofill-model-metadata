@@ -240,6 +240,22 @@ PATH="$PWD/.devnode:$PATH" pnpm run verify
 `.devnode/` is git-ignored. This affects any project in this environment that
 runs vitest, including `dsh-deep-sleep`.
 
+## Releasing
+
+Releases publish from the `release` workflow on a version tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow uses npm Trusted Publishing (OIDC, `id-token: write`), so no
+`NPM_TOKEN` secret is stored. npm refuses to attach a trusted publisher to a
+package that does not exist yet, so the first release has to be published once
+from a logged-in machine (`npm login && npm publish`); afterwards attach the
+publisher at the package's npm *Settings → Trusted publishing* page with this
+repository and `release.yml`, and later tags publish without a token.
+
 ## Limitations
 
 - Reads models.dev only; no other metadata source.

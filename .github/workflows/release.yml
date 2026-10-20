@@ -1,5 +1,15 @@
 # Publish to npm on version tags.
-# Requires an NPM_TOKEN secret with publish rights (npm access token).
+#
+# Uses npm Trusted Publishing (OIDC): the job exchanges a GitHub OIDC token for
+# a short-lived npm publish token, so no NPM_TOKEN secret is stored in the repo.
+#
+# npm does not let you attach a trusted publisher to a package that does not
+# exist yet, so the very first release must be published once from a logged-in
+# machine (`npm login && npm publish`). After that, attach the publisher at
+# https://www.npmjs.com/package/dsh-autofill-model-metadata/access with
+# repository peach0x33a/dsh-autofill-model-metadata and workflow release.yml;
+# later tag pushes then publish without any stored credential.
+#
 # Usage: git tag v0.1.0 && git push origin v0.1.0
 name: release
 
@@ -11,6 +21,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      # OIDC token for the npm trusted-publisher exchange.
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -23,12 +35,14 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing needs npm >= 11.5.1; keep the runner's npm current.
+      - run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
 
       - name: Typecheck, build and test
         run: pnpm run verify
 
+      # OIDC is picked up automatically when no NODE_AUTH_TOKEN is set.
       - name: Publish to npm
-        run: pnpm publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public

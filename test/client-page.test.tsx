@@ -89,7 +89,7 @@ describe('MetadataPage', () => {
 
     await waitFor(() => expect(screen.getByDisplayValue('openai/gpt-5.4')).toBeTruthy())
     expect(screen.getByText('b')).toBeTruthy()
-    expect(screen.getByText(/1 条路由在补齐全部模型前会被拒绝/)).toBeTruthy()
+    expect(screen.getByText(/补齐后才能保存并填充/)).toBeTruthy()
   })
 
   it('does not invent unsaved work when the two answers disagree', async () => {
@@ -161,7 +161,7 @@ describe('MetadataPage', () => {
     await act(async () => {
       screen.getByText('保存并填充').click()
     })
-    await waitFor(() => expect(screen.getByText(/当前为试运行/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/试运行/)).toBeTruthy())
   })
 
   it('enables save-and-fill when the host would accept the gap', async () => {
@@ -196,15 +196,33 @@ describe('MetadataPage', () => {
       inspect: { ok: true, revision: 1, resolved: true, mapping: {}, reports: [REPORT] },
     })
 
-    await waitFor(() => expect(screen.getByText('重新载入')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('重新加载')).toBeTruthy())
     await type(screen.getByLabelText('a models.dev 来源') as HTMLInputElement, 'openai/gpt-4o')
     await waitFor(() => expect(screen.getAllByText('有未保存修改').length).toBeGreaterThan(0))
 
     await act(async () => {
-      screen.getByText('重新载入').click()
+      screen.getByText('重新加载').click()
     })
     await waitFor(() => expect(calls.filter((call) => call.url.endsWith('/status')).length).toBeGreaterThan(1))
     expect(screen.getByDisplayValue('openai/gpt-4o')).toBeTruthy()
+  })
+
+  it('folds and unfolds a route card without losing the draft state', async () => {
+    mount({
+      status: { ok: true, revision: 1, mapping: { gw: { a: 'openai/gpt-5.4' } }, reports: [REPORT] },
+      inspect: { ok: true, revision: 1, resolved: true, mapping: { gw: { a: 'openai/gpt-5.4' } }, reports: [REPORT] },
+    })
+
+    await waitFor(() => expect(screen.getByDisplayValue('openai/gpt-5.4')).toBeTruthy())
+    const toggle = screen.getByRole('button', { name: /gw/ })
+    await act(async () => {
+      toggle.click()
+    })
+    expect(screen.queryByDisplayValue('openai/gpt-5.4')).toBeNull()
+    await act(async () => {
+      screen.getByRole('button', { name: /gw/ }).click()
+    })
+    expect(screen.getByDisplayValue('openai/gpt-5.4')).toBeTruthy()
   })
 
   it('applies one route from its card, using the route-scoped endpoint', async () => {
@@ -242,9 +260,9 @@ describe('MetadataPage', () => {
       inspect: { ok: true, revision: 1, resolved: true, mapping: { gw: { a: 'openai/gpt-5.4' } }, reports: [REPORT] },
     })
 
-    await waitFor(() => expect(screen.getAllByLabelText('搜索').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByLabelText('搜索目录').length).toBeGreaterThan(0))
     await act(async () => {
-      screen.getAllByLabelText('搜索')[0].click()
+      screen.getAllByLabelText('搜索目录')[0].click()
     })
     await waitFor(() => expect(screen.getByText('取消')).toBeTruthy())
     await act(async () => {

@@ -43,6 +43,9 @@ const SEARCH_DEBOUNCE_MS = 200
 /** How many catalog candidates one search asks for. */
 const SEARCH_LIMIT = 30
 
+/** How long a successful save/fill notice stays on screen. */
+const MESSAGE_TTL_MS = 5000
+
 /** Where the bundle's `fetch` calls go when no override is given. */
 const globalFetch: typeof fetch = (input, init) => fetch(input, init)
 
@@ -68,6 +71,8 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
   const [error, setError] = useState<string | undefined>(undefined)
   const [message, setMessage] = useState<string | undefined>(undefined)
   const [unmappedOnly, setUnmappedOnly] = useState(false)
+  /** Route cards the operator folded shut; absent means expanded. */
+  const [collapsedRoutes, setCollapsedRoutes] = useState<Record<string, boolean>>({})
   const [searches, setSearches] = useState<Record<string, SearchState>>({})
   /**
    * The settings revision the displayed mapping was read at.
@@ -83,6 +88,29 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
   /** The host's table as of the last answer, readable inside `load`. */
   const savedRef = useRef<Mapping>({})
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  /** A pending "clear the transient status message" timer. */
+  const messageTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  /**
+   * Show a status message. A success notice clears itself after a few seconds;
+   * a failure notice stays until the next action because it carries a reason
+   * the reader may still need.
+   *
+   * @param text - the message, or undefined to clear it.
+   * @param transient - whether to dismiss a success notice automatically.
+   */
+  const showMessage = useCallback((text: string | undefined, transient = false): void => {
+    const pending = messageTimer.current
+    if (pending !== undefined) clearTimeout(pending)
+    messageTimer.current = undefined
+    setMessage(text)
+    if (text !== undefined && transient) {
+      messageTimer.current = setTimeout(() => {
+        messageTimer.current = undefined
+        setMessage(undefined)
+      }, MESSAGE_TTL_MS)
+    }
+  }, [])
 
   /** Load the whole picture: the unresolved status, then the resolved report. */
   const load = useCallback(async (): Promise<void> => {
@@ -146,6 +174,7 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
     () => () => {
       for (const timer of Object.values(timers.current)) clearTimeout(timer)
       timers.current = {}
+      if (messageTimer.current !== undefined) clearTimeout(messageTimer.current)
     },
     [],
   )
@@ -201,7 +230,7 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
     async (apply: boolean): Promise<void> => {
       setSaving(true)
       setError(undefined)
-      setMessage(undefined)
+      showMessage(undefined)
       try {
         const answer = await saveMapping(globalFetch, draft, apply, revision)
         setSaved(answer.mapping)
@@ -209,14 +238,14 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
         if (answer.routes !== undefined) setReports(answer.routes)
         setRevision((current) => current)
         if (!apply) {
-          setMessage(translate('saved'))
+          showMessage(translate('saved'), true)
         } else if (answer.applyError !== undefined) {
           // The save landed; the pass is what failed, and saying "applied" here
           // would claim a fill that never happened.
-          setMessage(translate('savedApplyFailed', { reason: answer.applyError }))
+          showMessage(translate('savedApplyFailed', { reason: answer.applyError }))
         } else {
           const pass = summarizePass(answer.applied ?? [])
-          setMessage(
+          showMessage(
             pass.kind === 'refused'
               ? translate('savedRefused', { route: pass.route ?? '' })
               : pass.kind === 'dry-run'
@@ -224,6 +253,7 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
                 : pass.kind === 'unchanged'
                   ? translate('savedNothing')
                   : translate('savedApplied'),
+            pass.kind !== 'refused',
           )
         }
         if (apply) {
@@ -238,8 +268,13 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
         setSaving(false)
       }
     },
-    [draft, revision, translate],
+    [draft, revision, translate, showMessage],
   )
+
+  /** Fold or unfold one route card; model rows keep their drafts while hidden. */
+  const toggleRoute = useCallback((route: string): void => {
+    setCollapsedRoutes((current) => ({ ...current, [route]: current[route] !== true }))
+  }, [])
 
   /** Close one row's picker without choosing a record. */
   const closeSearch = useCallback((route: string, modelId: string): void => {
@@ -260,18 +295,30 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
     async (route?: string): Promise<void> => {
       setSaving(true)
       setError(undefined)
-      setMessage(undefined)
+      showMessage(undefined)
       try {
         const answer = await applyNow(globalFetch, route)
         if (answer.routes !== undefined) setReports(answer.routes)
-        setMessage(answer.log.length === 0 ? translate('applied') : answer.log.join(' | '))
+        // The host's log lines are diagnostics, not user copy: summarise the
+        // outcome into the same translated sentences the save-and-fill path uses.
+        const pass = summarizePass(answer.log)
+        showMessage(
+          pass.kind === 'refused'
+            ? translate('fillRefused')
+            : pass.kind === 'dry-run'
+              ? translate('fillDryRun')
+              : pass.kind === 'applied'
+                ? translate('applied')
+                : translate('fillNothing'),
+          pass.kind !== 'refused',
+        )
       } catch (failure) {
         setError(explain(failure))
       } finally {
         setSaving(false)
       }
     },
-    [translate],
+    [translate, showMessage],
   )
 
   const cards = useMemo(() => cardsFor(reports, draft, saved), [reports, draft, saved])
@@ -304,12 +351,14 @@ export function MetadataPage(props: PageProps = {}): ReactNode {
       saving={saving}
       message={message}
       unmappedOnly={unmappedOnly}
+      collapsedRoutes={collapsedRoutes}
       searches={searches}
       onReload={() => void load()}
       onInspect={() => void load()}
       onApplyAll={() => void runPass()}
       onApplyRoute={(route) => void runPass(route)}
       onToggleUnmappedOnly={() => setUnmappedOnly((current) => !current)}
+      onToggleRoute={toggleRoute}
       onEdit={edit}
       onSearch={search}
       onCloseSearch={closeSearch}

@@ -76,6 +76,8 @@ export interface ViewProps {
   saving: boolean
   message?: string
   unmappedOnly: boolean
+  /** Which route cards are collapsed; absent means expanded. */
+  collapsedRoutes: Record<string, boolean>
   searches: Record<string, SearchState>
   onReload: () => void
   onInspect: () => void
@@ -83,6 +85,7 @@ export interface ViewProps {
   /** Apply the saved mapping for one route only. */
   onApplyRoute: (route: string) => void
   onToggleUnmappedOnly: () => void
+  onToggleRoute: (route: string) => void
   onEdit: (route: string, modelId: string, value: string) => void
   onSearch: (route: string, modelId: string, query: string) => void
   onCloseSearch: (route: string, modelId: string) => void
@@ -97,12 +100,12 @@ type Tone = 'ok' | 'info' | 'warn' | 'bad' | 'neutral'
 
 /** Page styles: host tokens only, no literal colours. */
 const PAGE_CSS = `
-.dsh-af-page{display:flex;flex-direction:column;gap:14px;max-width:720px;min-width:0;color:var(--dsw-alias-label-primary);font-size:14px;line-height:22px;box-sizing:border-box}
+.dsh-af-page{display:flex;flex-direction:column;gap:16px;max-width:720px;min-width:0;color:var(--dsw-alias-label-primary);font-size:14px;line-height:22px;box-sizing:border-box}
 .dsh-af-head{display:flex;flex-direction:column;gap:2px;min-width:0}
 .dsh-af-title{margin:0;font-size:16px;font-weight:500;line-height:24px}
 .dsh-af-intro{margin:0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}
 .dsh-af-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
-.dsh-af-toolbarActions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
+.dsh-af-toolbarActions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}
 .dsh-af-btn{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:0 10px;border-radius:var(--dsw-radius-sm);border:none;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer}
 .dsh-af-btn:disabled{opacity:.4;cursor:not-allowed}
 .dsh-af-btn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
@@ -142,29 +145,35 @@ const PAGE_CSS = `
 .dsh-af-banner[data-tone=warn]{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 10%,transparent);color:var(--dsw-alias-state-warn-label)}
 .dsh-af-bannerTitle{font-weight:500}
 .dsh-af-bannerHint{opacity:.8}
-.dsh-af-groups{display:flex;flex-direction:column;gap:18px;min-width:0}
+.dsh-af-groups{display:flex;flex-direction:column;gap:16px;min-width:0}
 .dsh-af-group{display:flex;flex-direction:column;min-width:0}
 .dsh-af-routeCard{min-width:0;overflow:hidden;border:.5px solid var(--dsw-alias-settings-card-stroke);border-radius:var(--dsw-radius-xl);background:var(--dsw-alias-settings-card-fill)}
-.dsh-af-cardHead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;padding:11px 14px}
+.dsh-af-cardHead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;padding:12px 14px}
 .dsh-af-headIcon{display:inline-flex;flex:none;color:var(--dsw-alias-label-tertiary)}
+.dsh-af-cardToggle{display:flex;flex:1 1 auto;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;margin:-2px -4px;padding:2px 4px;border:none;border-radius:var(--dsw-radius-sm);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dsh-af-cardToggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-af-cardToggle:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
+.dsh-af-chevron{display:inline-flex;flex:none;width:14px;height:14px;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);transition:transform .12s ease}
+.dsh-af-chevron[data-expanded=false]{transform:rotate(-90deg)}
+@media (prefers-reduced-motion:reduce){.dsh-af-chevron{transition:none}}
 .dsh-af-groupTitle{margin:0;font-size:14px;font-weight:500;line-height:22px;overflow-wrap:anywhere}
 .dsh-af-groupRoute{flex:none;padding:1px 6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-xs);color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11px;line-height:16px}
 .dsh-af-groupCounts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0}
 .dsh-af-groupActions{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
 .dsh-af-reason{margin:0;padding:0 14px 10px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;overflow-wrap:anywhere}
 .dsh-af-modelList{border-top:.5px solid var(--dsw-alias-border-l2)}
-.dsh-af-model{display:flex;flex-direction:column;gap:6px;min-width:0;padding:10px 14px}
+.dsh-af-model{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px 14px}
 .dsh-af-model + .dsh-af-model{border-top:.5px solid var(--dsw-alias-border-l2)}
 .dsh-af-modelLine{display:flex;align-items:center;gap:6px;min-width:0}
 .dsh-af-modelIcon{display:inline-flex;flex:none;color:var(--dsw-alias-label-tertiary)}
-.dsh-af-modelId{flex:0 1 auto;min-width:0;max-width:44%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12.5px;font-weight:500;line-height:20px}
+.dsh-af-modelId{flex:1 1 0;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12.5px;font-weight:500;line-height:20px}
 .dsh-af-mapArrow{display:inline-flex;flex:none;color:var(--dsw-alias-label-caption)}
-.dsh-af-mapField{box-sizing:border-box;display:flex;align-items:center;gap:2px;flex:1 1 160px;min-width:120px;height:30px;padding:0 2px 0 8px;border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-layer-1)}
+.dsh-af-mapField{box-sizing:border-box;display:flex;align-items:center;gap:2px;flex:1 1 0;min-width:0;height:32px;padding:0 2px 0 8px;border:.5px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-layer-1)}
 .dsh-af-mapField:focus-within{border-color:var(--dsw-alias-state-business-primary);box-shadow:0 0 0 1px var(--dsw-alias-state-business-primary)}
 .dsh-af-mapInput{flex:1 1 auto;min-width:0;padding:0;border:none;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:13px;line-height:20px}
 .dsh-af-mapInput::placeholder{color:var(--dsw-alias-label-dimmed);font-family:var(--ds-font-family-text,inherit)}
 .dsh-af-stateSlot{display:inline-flex;flex:none;align-items:center;gap:4px}
-.dsh-af-facts{display:flex;flex-wrap:wrap;align-items:center;gap:3px 12px;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
+.dsh-af-facts{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 .dsh-af-fact{display:inline-flex;align-items:center;gap:4px;min-width:0}
 .dsh-af-factIcon{display:inline-flex;flex:none;color:var(--dsw-alias-label-caption)}
 .dsh-af-factIcon[data-tone=info]{color:var(--dsw-alias-state-business-primary)}
@@ -331,6 +340,15 @@ function IconSparkle(): ReactNode {
   return (
     <Svg>
       <path d="M8 2.4l1.3 3.5 3.5 1.3-3.5 1.3L8 12 6.7 8.5 3.2 7.2l3.5-1.3L8 2.4Z" />
+    </Svg>
+  )
+}
+
+/** A disclosure chevron, pointing down when expanded. */
+function IconChevron(): ReactNode {
+  return (
+    <Svg>
+      <path d="M4.8 6.2 8 9.4l3.2-3.2" />
     </Svg>
   )
 }
@@ -539,6 +557,7 @@ function RouteSection(props: {
   t: Translate
   searches: Record<string, SearchState>
   unmappedOnly: boolean
+  collapsed: boolean
   saving: boolean
   dirty: boolean
   actions: Pick<
@@ -550,6 +569,7 @@ function RouteSection(props: {
     | 'onClear'
     | 'onRemoveOrphan'
     | 'onApplyRoute'
+    | 'onToggleRoute'
   >
 }): ReactNode {
   const { card, t } = props
@@ -559,29 +579,46 @@ function RouteSection(props: {
   // A route where every model is already complete does not need the word
   // "complete" repeated in a pill; a check and the model count say it once.
   const allComplete = card.counts.models > 0 && card.counts.unchanged === card.counts.models
+  // Filtering for gaps must reveal the rows it found; otherwise honour the
+  // user's collapse choice. The list keeps its id while hidden so
+  // `aria-controls` always resolves.
+  const open = props.unmappedOnly || !props.collapsed
+  const listId = `dsh-af-models-${encodeURIComponent(card.route)}`
   return (
     <section className="dsh-af-group" aria-label={card.displayName}>
       <div className="dsh-af-routeCard">
         <header className="dsh-af-cardHead">
-          <span className="dsh-af-headIcon" aria-hidden="true">
-            <IconServer />
-          </span>
-          <h3 className="dsh-af-groupTitle">{card.displayName}</h3>
-          {card.displayName === card.route ? null : <span className="dsh-af-groupRoute">{card.route}</span>}
-          <span className="dsh-af-groupCounts">
-            {allComplete ? (
-              <Tag
-                label={t('summaryModels', { count: card.counts.models })}
-                tone="ok"
-                icon={<IconCheck />}
-                title={t('summaryUnchanged', { count: card.counts.unchanged })}
-              />
-            ) : (
-              summaryParts(card.counts).map((part) => (
-                <Tag key={part.key} label={t(part.key, { count: part.count })} tone={summaryTone(part.key)} />
-              ))
-            )}
-          </span>
+          <button
+            type="button"
+            className="dsh-af-cardToggle"
+            aria-expanded={open}
+            aria-controls={listId}
+            title={open ? t('collapseRoute') : t('expandRoute')}
+            onClick={() => props.actions.onToggleRoute(card.route)}
+          >
+            <span className="dsh-af-chevron" data-expanded={open} aria-hidden="true">
+              <IconChevron />
+            </span>
+            <span className="dsh-af-headIcon" aria-hidden="true">
+              <IconServer />
+            </span>
+            <span className="dsh-af-groupTitle">{card.displayName}</span>
+            {card.displayName === card.route ? null : <span className="dsh-af-groupRoute">{card.route}</span>}
+            <span className="dsh-af-groupCounts">
+              {allComplete ? (
+                <Tag
+                  label={t('summaryModels', { count: card.counts.models })}
+                  tone="ok"
+                  icon={<IconCheck />}
+                  title={t('summaryUnchanged', { count: card.counts.unchanged })}
+                />
+              ) : (
+                summaryParts(card.counts).map((part) => (
+                  <Tag key={part.key} label={t(part.key, { count: part.count })} tone={summaryTone(part.key)} />
+                ))
+              )}
+            </span>
+          </button>
           {card.writable && !props.dirty && card.rows.some((row) => row.state === 'filled') ? (
             <span className="dsh-af-groupActions">
               <Button variant="ghost" disabled={props.saving} onClick={() => props.actions.onApplyRoute(card.route)}>
@@ -595,10 +632,11 @@ function RouteSection(props: {
         {card.reason === undefined ? null : <p className="dsh-af-reason">{card.reason}</p>}
 
         {rows.length === 0 ? (
-          <p className="dsh-af-emptyInline">{t('noModels')}</p>
+          open ? <p className="dsh-af-emptyInline">{t('noModels')}</p> : null
         ) : (
-          <div className="dsh-af-modelList">
-            {rows.map((row) => (
+          <div id={listId} className="dsh-af-modelList" hidden={!open}>
+            {open
+              ? rows.map((row) => (
               <ModelRow
                 key={rowKey(row.route, row.modelId)}
                 row={row}
@@ -609,8 +647,9 @@ function RouteSection(props: {
                 onCloseSearch={props.actions.onCloseSearch}
                 onPick={props.actions.onPick}
                 onClear={props.actions.onClear}
-              />
-            ))}
+                />
+                ))
+              : null}
           </div>
         )}
 
@@ -659,7 +698,6 @@ export function MetadataView(props: ViewProps): ReactNode {
   const coverageText = t('coverage', {
     mapped: coverage.mapped,
     models: coverage.models,
-    unmapped: coverage.unmapped,
   })
   const coverageTone: Tone = !info.resolved
     ? 'neutral'
@@ -767,6 +805,7 @@ export function MetadataView(props: ViewProps): ReactNode {
             t={t}
             searches={props.searches}
             unmappedOnly={props.unmappedOnly}
+            collapsed={props.collapsedRoutes[card.route] === true}
             saving={props.saving}
             dirty={props.dirty}
             actions={props}

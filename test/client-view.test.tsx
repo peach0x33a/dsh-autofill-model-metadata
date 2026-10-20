@@ -75,12 +75,14 @@ function render(overrides: Partial<ViewProps> & { draft?: Mapping } = {}): strin
     dirty: false,
     saving: false,
     unmappedOnly: false,
+    collapsedRoutes: {},
     searches: {},
     onReload: () => undefined,
     onInspect: () => undefined,
     onApplyAll: () => undefined,
     onApplyRoute: () => undefined,
     onToggleUnmappedOnly: () => undefined,
+    onToggleRoute: () => undefined,
     onEdit: () => undefined,
     onSearch: () => undefined,
     onCloseSearch: () => undefined,
@@ -119,14 +121,14 @@ describe('MetadataView', () => {
   it('marks unmapped models and reports the refusal they cause', () => {
     const html = render()
     expect(html).toContain('未映射')
-    expect(html).toContain('有 1 条路由在补齐全部模型前会被拒绝')
+    expect(html).toContain('补齐后才能保存并填充')
   })
 
   it('surfaces mapping keys the route does not declare, with a way to remove them', () => {
     const html = render()
-    expect(html).toContain('映射中该路由未声明的键')
+    expect(html).toContain('这些映射指向该路由未声明的模型')
     expect(html).toContain('typo-key')
-    expect(html).toContain('删除')
+    expect(html).toContain('移除映射')
   })
 
   it('gates a route that has no gap once the draft fills it and drops the typo', () => {
@@ -142,7 +144,7 @@ describe('MetadataView', () => {
     const html = render({ draft, dirty: true })
     expect(html).not.toContain('会被拒绝')
     expect(html).toContain('有未保存修改')
-    expect(html).toContain('已映射 3/3，缺 0')
+    expect(html).toContain('3/3 个模型已映射')
   })
 
   it('offers catalog candidates for the row being edited, and marks unusable ones', () => {
@@ -184,7 +186,7 @@ describe('MetadataView', () => {
     expect(html).toContain('失败：503: no host half')
     // The fallback sentence is the point of this banner: it names the surface
     // that always works, since 0.2.0-rc.2 renders no generated form.
-    expect(html).toContain('本部署把该插件配置存在设置文档里')
+    expect(html).toContain('配置页暂时不可用')
   })
 
   it('explains an unreachable catalog without hiding the mapping', () => {
@@ -197,13 +199,22 @@ describe('MetadataView', () => {
       },
     })
     expect(html).toContain('无法读取目录：ENOTFOUND')
-    expect(html).toContain('映射状态仍会显示')
+    expect(html).toContain('映射仍可编辑')
   })
 
   it('filters to unmapped models only', () => {
     const html = render({ unmappedOnly: true })
     expect(html).not.toContain('value="google/gemini-3.8-flash"')
     expect(html).toContain('step-3.7-flash')
+  })
+
+  it('folds a route card while keeping its header readable', () => {
+    const html = render({ collapsedRoutes: { 'my-gateway': true } })
+    expect(html).toContain('gzz')
+    expect(html).toContain('aria-expanded="false"')
+    // The model rows are gone, not just visually hidden.
+    expect(html).not.toContain('value="google/gemini-3.8-flash"')
+    expect(html).not.toContain('step-3.7-flash')
   })
 
   it('explains an unmapped-only view that has nothing left to show', () => {
@@ -232,24 +243,24 @@ describe('MetadataView', () => {
         builtinFormKept: true,
       },
     })
-    expect(html).toContain('当前为试运行：只报告，不写入。')
+    expect(html).toContain('试运行中：仅报告结果，不会写入配置。')
     expect(html).toContain('映射已保存。')
     expect(html).toContain('保存映射')
     expect(html).toContain('保存并填充')
-    expect(html).toContain('你手写声明的字段永远不会被覆盖。')
+    expect(html).toContain('手工声明的字段不会被自动覆盖。')
   })
 
   it('says so when there is nothing to show yet', () => {
-    expect(render({ loading: true, cards: [], coverage: coverageOf([]) })).toContain('载入中…')
+    expect(render({ loading: true, cards: [], coverage: coverageOf([]) })).toContain('加载中…')
     const empty = render({ cards: [], coverage: coverageOf([]) })
-    expect(empty).toContain('还没有任何路由声明映射')
+    expect(empty).toContain('还没有可映射的路由')
   })
 
   it('keeps the apply button unavailable while edits are unsaved', () => {
     // "Fill now" runs the *saved* mapping, so letting it fire with a draft on
     // screen would apply something other than what the operator sees; the
     // save-and-fill button is the one that carries the edits.
-    expect(buttonAround(render({ dirty: true, draft: {} }), '立即填充')).toContain('disabled')
-    expect(buttonAround(render(), '立即填充')).not.toContain('disabled')
+    expect(buttonAround(render({ dirty: true, draft: {} }), '填充全部模型')).toContain('disabled')
+    expect(buttonAround(render(), '填充全部模型')).not.toContain('disabled')
   })
 })

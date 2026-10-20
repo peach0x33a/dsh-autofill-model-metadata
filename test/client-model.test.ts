@@ -329,8 +329,8 @@ describe('copy through the host locale service', () => {
   it('substitutes the same placeholders the platform would', () => {
     const bound = platformTranslator({ [COPY_NS]: zh })
     const t = makeT(bound(COPY_NS))
-    expect(t('coverage', { mapped: 2, models: 3, unmapped: 1 })).toBe('已映射 2/3，缺 1')
-    expect(t('blocked', { routes: 1 })).toBe('有 1 条路由在补齐全部模型前会被拒绝')
+    expect(t('coverage', { mapped: 2, models: 3, unmapped: 1 })).toBe('2/3 个模型已映射')
+    expect(t('blocked', { routes: 1 })).toBe('有 1 条路由还有模型未映射，补齐后才能保存并填充。')
     expect(t('catalogUnavailable', { reason: 'ENOTFOUND' })).toBe('无法读取目录：ENOTFOUND')
     expect(t('failed', { reason: 'boom' })).toBe('失败：boom')
   })
@@ -367,7 +367,7 @@ describe('copy through the host locale service', () => {
   it('falls back when no translator is bound at all', () => {
     const t = makeT(undefined)
     expect(t('title')).toBe(zh.title)
-    expect(t('catalogProviders', { count: 226 })).toBe('226 个提供方')
+    expect(t('catalogProviders', { count: 226 })).toBe('226 个提供商')
   })
 
   it('falls back when the bound translator throws', () => {

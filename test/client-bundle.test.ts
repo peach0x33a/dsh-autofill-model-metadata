@@ -204,8 +204,8 @@ describe('the built client bundle', () => {
     // A dictionary entry the platform cannot read would throw inside `translate`
     // (it calls `.replace` on the resolved value) and this render would fail.
     // These are the parameterised lines the first paint always shows.
-    expect(html).toContain('已映射 0/0，缺 0')
-    expect(html).toContain('载入中…')
+    expect(html).toContain('0/0 个模型已映射')
+    expect(html).toContain('加载中…')
     // Nothing may reach the DOM with a placeholder still in it.
     expect(html).not.toMatch(/\{\w+\}/)
   })
@@ -231,7 +231,7 @@ describe('the built client bundle', () => {
     // not run during a static render, so this is the page's first paint.
     const html = renderToStaticMarkup(React.createElement(component as never))
     expect(html).toContain('模型元数据补齐')
-    expect(html).toContain('载入中…')
+    expect(html).toContain('加载中…')
   })
 
   it('tears its locale dictionaries down with the plugin, so a reload can re-register them', () => {

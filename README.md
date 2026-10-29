@@ -1,5 +1,7 @@
 # dsh-autofill-model-metadata
 
+English | [中文](README.zh.md)
+
 Fill a DSH gateway route's model metadata (`name`, `contextWindow`, `maxTokens`,
 `input`, `reasoningEfforts`) from the [models.dev](https://models.dev) catalog —
 **using only the mappings you declare by hand**.
@@ -25,19 +27,99 @@ Declared fields always win: the plugin only fills fields the profile leaves
 
 ## Install
 
-Requires DSH `>= 0.2.0-rc.2`. From the plugin checkout:
+Requires DSH `>= 0.2.0-rc.2` (the `engines.dsh` range in `package.json`) and
+`pnpm` on `PATH`, because `dsh plugin` forwards its arguments to pnpm inside the
+profile directory.
+
+### From npm (recommended)
 
 ```sh
-DSH="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"
+npm view dsh-autofill-model-metadata version        # the latest published version
+dsh plugin --profile web add dsh-autofill-model-metadata@<version>
+```
+
+`--profile` names the profile you actually boot: `web` for the browser UI,
+`headless` for one-shot runs, or your own profile name. Pin the version: pnpm ≥ 11
+won't resolve a version published within its `minimumReleaseAge` window (1 day by
+default), so an unpinned `add` picks an older build or fails with
+`ERR_PNPM_NO_MATURE_MATCHING_VERSION`. Docker/CLI installs can use the zero-install
+entry point instead:
+
+```sh
+npx -y @deepseek-ai/dsh plugin --profile web add dsh-autofill-model-metadata@<version>
+```
+
+Removing it again is the same verb:
+
+```sh
+dsh plugin --profile web remove dsh-autofill-model-metadata
+```
+
+### From a checkout
+
+Useful while developing the plugin. `link:` installs and rebuilds nothing, but
+the checkout must have been built (`pnpm install && pnpm run build`) so `lib/`
+exists:
+
+```sh
+DSH="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"   # macOS Desktop
 "$DSH" plugin --profile desktop add link:/absolute/path/to/dsh-autofill-model-metadata
 ```
 
-Then restart DSH Desktop (plugins mount at startup).
+`desktop` is owned by the Desktop app, so manage it with the Desktop runtime's
+`dsh` binary; for a CLI profile use `dsh plugin --profile <name> add link:<path>`.
+
+### Verify, then restart
+
+Bundle membership is read at startup, so restart the profile (or DSH Desktop)
+afterwards. To confirm the row is composed without booting:
+
+```sh
+dsh --profile web --dump-config | grep -A3 'id: dsh-autofill-model-metadata'
+```
+
+An installed plugin is **inert until a mapping is declared**: no catalog fetch,
+no settings write. Declaring it — through the settings page or by editing the
+profile's `cordis.patch.yml` — is covered in [CONFIGURATION.md](CONFIGURATION.md).
+
+### For LLM
+
+If you are an agent whose task is to install this plugin, take the **npm path**
+above — do not clone the repository, build it, or install from a git spec. Follow
+these steps:
+
+1. Find the profile to install into: `ls "${DSH_HOME:-$HOME/.dsh}/profiles"`,
+   and prefer the one the user actually boots (`web` for the browser UI).
+   `desktop` belongs to DSH Desktop and needs that app's own `dsh` binary.
+2. Install a pinned version:
+   `dsh plugin --profile <profile> add dsh-autofill-model-metadata@<version>`.
+   Exit code 0 only means pnpm resolved the package; confirm the dependency with
+   `dsh plugin --profile <profile> list --depth 0` and the composed row with
+   `dsh --profile <profile> --dump-config`. If pnpm answers
+   `ERR_PNPM_NO_MATURE_MATCHING_VERSION`, the version is younger than its
+   `minimumReleaseAge` window — pick an older published version
+   (`npm view dsh-autofill-model-metadata versions`) rather than disabling the
+   setting.
+3. Restart the profile so the new bundle mounts. Do not hot-patch around this.
+4. Leave the configuration to the operator. An empty `mapping` is the correct
+   post-install state — **never invent mappings**; every mapping must name a
+   models.dev record the operator has chosen. Configuration steps, file
+   locations and the catalog search endpoint are in
+   [CONFIGURATION.md](CONFIGURATION.md); report anything you are unsure of
+   instead of guessing.
+
+If pnpm refuses the package with an `allowBuilds` message, that only happens for
+git-sourced installs, which this package does not need: the published tarball
+already ships `lib/`.
 
 ## Configure
 
-The config accepts these fields (the graphical page edits the mapping, the
-rest stays in the settings document):
+Full guide — where the config lives, how to write the mapping, refusals and
+troubleshooting: **[CONFIGURATION.md](CONFIGURATION.md)**. The short version
+follows.
+
+The config accepts these fields (the graphical page edits the mapping; the rest
+is edited in the profile's `cordis.patch.yml`):
 
 ```jsonc
 {
@@ -87,7 +169,7 @@ Every endpoint is loopback-only and answers `403` to anything else; `/apply`,
 `/mapping` answers `200` once the write lands, even when a requested fill is then
 refused: the mapping really was saved, and a failed pass is reported separately in
 `applyError` rather than disguised as a failed save. `/status` and `/inspect`
-answer with the mapping read from the settings document, not from the volatile
+answer with the mapping read from the stored configuration, not from the volatile
 copy the loader refreshes a moment after a write.
 
 ## Settings
@@ -179,83 +261,15 @@ Per route, all-or-nothing. A refused route writes nothing.
 `undeclared-mapping` fires even with `requireCompleteMapping: false`, so a typo
 in a local id is never silently ignored.
 
-## Design notes
+## Development and releasing
 
-- **One atomic write per route**: a single `set` op at
-  `['providers', <route>, 'models']`, fenced by the revision re-read immediately
-  before `mutate`. Routes are independent — one refusal does not block another.
-- **Inert when unmapped**: with `mapping: {}` there is no catalog fetch, no
-  cache write, no settings read.
-- **Offline tolerant**: a failed fetch falls back to the cached catalog and logs;
-  a stale cache is used rather than refusing.
-- **User layer wins**: the merge base is the settings *user* layer when present.
-
-## Development
+Building, testing, the two halves of the bundle, CI, the macOS vitest workaround
+and the release process all live in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ```sh
 pnpm install
 pnpm run verify     # tsc --noEmit && tsdown && vitest
 ```
-
-`verify` runs the whole suite: unit tests per module, a composition test driving
-`apply()` against a stub host, a contract test validating planned output against
-the real `@deepseek-ai/dsh-llm-pi-ai@0.2.0-rc.2` schema (it skips itself if that
-package is absent), render tests for the settings page, and a client-bundle test
-that loads the built `lib/client.js` through a stub `window.__ModuleLoader__`
-with the same seeded modules the shell provides.
-
-### Two halves
-
-| half | entry | output | loaded by |
-| --- | --- | --- | --- |
-| host | `src/index.ts` | `lib/index.mjs` (ESM) | the DSH Loader, via the `cordis.patch.yml` row |
-| browser | `src/client/index.tsx` | `lib/client.js` (CJS + `window.__ModuleLoader__` banner) | the Web shell, via `dsh.client` in `package.json` |
-
-`react` and `react/jsx-runtime` are external and resolved by the shell's module
-seed — bundling a second React would break hooks. The page deliberately imports
-no Harness Client package: shared UI modules change without notice, so it carries
-its own controls (buttons, tags, checkbox, inputs) styled only with
-`--dsw-alias-*` theme tokens, matching the shipped settings pages. The bundle id
-must stay the package name: it is the cache key the loader serves at
-`/plugins/<package>/client.js`.
-
-Client-only changes need the shell to re-read the bundle: a rebuild is enough
-while the client-plugin HMR receiver is active, otherwise reload the page (the
-loader cache-busts on the bundle's revision), or restart DSH Desktop.
-
-### macOS: vitest cannot start under the DSH runtime node
-
-The node shipped with DSH Desktop is signed with the hardened runtime, while
-rollup's native binary is ad-hoc signed. macOS refuses the load
-(`ERR_DLOPEN_FAILED`, *"mapping process and mapped file (non-platform) have
-different Team IDs"*), so `vitest` dies before collecting. Re-sign a copy of node
-ad-hoc and run the suite with it:
-
-```sh
-mkdir -p .devnode && cp "$(command -v node)" .devnode/node
-codesign --force --sign - .devnode/node
-PATH="$PWD/.devnode:$PATH" pnpm run verify
-```
-
-`.devnode/` is git-ignored. This affects any project in this environment that
-runs vitest, including `dsh-deep-sleep`.
-
-## Releasing
-
-Releases publish from the `release` workflow on a version tag:
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The workflow uses npm Trusted Publishing (OIDC, `id-token: write`), so no
-`NPM_TOKEN` secret is stored. npm refuses to attach a trusted publisher to a
-package that does not exist yet, so the first release has to be published once
-from a logged-in machine (`npm login && npm publish`); afterwards attach the
-publisher at the package's npm *Settings → Trusted publishing* page with this
-repository and `release.yml`, and later tags publish without a token. The publish
-step skips versions already on the registry, so re-pushing a tag is safe.
 
 ## Limitations
 

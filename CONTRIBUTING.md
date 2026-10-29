@@ -5,6 +5,7 @@ Everything about building, testing and releasing the plugin. For using it, see
 [CONFIGURATION.md](CONFIGURATION.md).
 
 - [Setup](#setup)
+- [Install a checkout into a profile](#install-a-checkout-into-a-profile)
 - [What `verify` runs](#what-verify-runs)
 - [Two halves](#two-halves)
 - [Client-only changes](#client-only-changes)
@@ -26,6 +27,26 @@ pnpm run verify     # tsc --noEmit && tsdown && vitest
 `test` runs vitest alone; `typecheck` and `build` are separate steps when you
 want them on their own. There is no lint step and no formatter config: match the
 surrounding file.
+
+## Install a checkout into a profile
+
+Use this while developing. `link:` installs and rebuilds nothing, so build first
+(`pnpm install && pnpm run build`) or the profile will load a stale or missing
+`lib/`:
+
+```sh
+DSH="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"   # macOS Desktop
+"$DSH" plugin --profile desktop add link:/absolute/path/to/dsh-autofill-model-metadata
+```
+
+`desktop` is owned by the Desktop app, so it must be managed with the Desktop
+runtime's `dsh` binary; for a CLI profile use
+`dsh plugin --profile <name> add link:<path>` instead. Confirm the row composed
+without booting, then restart the profile:
+
+```sh
+dsh --profile web --dump-config | grep -A3 'id: dsh-autofill-model-metadata'
+```
 
 ## What `verify` runs
 

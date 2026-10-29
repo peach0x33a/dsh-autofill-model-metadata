@@ -13,9 +13,11 @@ mapping.
 - [The mapping](#the-mapping)
 - [Field reference](#field-reference)
 - [Two ways to edit it](#two-ways-to-edit-it)
+- [Settings page policy](#settings-page-policy)
 - [Applying and verifying](#applying-and-verifying)
 - [Refusals: why nothing was written](#refusals-why-nothing-was-written)
 - [Troubleshooting](#troubleshooting)
+- [Limitations](#limitations)
 
 ## Where the configuration lives
 
@@ -94,6 +96,26 @@ catalog** box is the same query.
 
 ## Field reference
 
+The whole surface, with every default shown:
+
+```jsonc
+{
+  "mapping": {
+    "my-gateway": {
+      "claude-opus-4-5": "anthropic/claude-opus-4-5",
+      "gemini-3-pro": "google/gemini-3-pro-preview"
+    }
+  },
+  "modelsDevUrl": "https://models.dev/api.json",
+  "cachePath": "$DSH_HOME/plugins/dsh-autofill-model-metadata/models.dev.json",
+  "cacheTTLHours": 24,
+  "applyOnStart": true,
+  "dryRun": false,
+  "requireCompleteMapping": true,
+  "builtinSettingsForm": "auto"
+}
+```
+
 | field | type | default | meaning |
 | --- | --- | --- | --- |
 | `mapping` | `{ route: { modelId: "provider/model" } }` | `{}` | the declared table; empty means the plugin does nothing at all |
@@ -136,6 +158,8 @@ refusals that would apply.
 - **Save mapping** writes the whole table in one revision-fenced operation.
 - **Save and fill** does that and runs a pass.
 - Nothing is written until you save, and unsaved edits survive a reload.
+- A dry run or an already-complete route is reported as exactly that rather than
+  as a fill.
 
 The page reads the settings revision together with its state and sends it back
 when saving, so an edit made in the profile patch file while the page sat open
@@ -189,17 +213,56 @@ that appears in the mapping. A mapped route the host does not offer is still
 listed, with its reason, so a typo cannot hide. With no routes at all, add a
 custom provider and its models under **Settings → Models** first.
 
+## Settings page policy
+
+The plugin ships a graphical page, and it also honours the host's `autoGenerate`
+flag for its schema — so a host that renders generated forms, now or in a later
+version, keeps showing one whenever this page is not there.
+
+| `builtinSettingsForm` | behaviour |
+| --- | --- |
+| `"auto"` (default) | the generated form stays available until the browser half loads and reports in (`POST /page-live`) |
+| `"always"` | the generated form is never suppressed |
+| `"never"` | the generated form is suppressed as soon as the plugin mounts |
+
+`true`/`false` are accepted as aliases for `always`/`never`.
+
+**What "the original form" means in 0.2.0-rc.2.** The shipped client contains no
+generic schema-driven form renderer at all. Every official settings page
+(`Models`, `Shell`, `Agent loop`, …) is a hand-written companion package, and
+`autoGenerate` is carried by the settings transport but consumed by nothing yet.
+So on this version the surfaces for a plugin config are:
+
+1. this page, when its bundle loads;
+2. the profile's own patch file, always — hand-editable, and the thing the page
+   writes back to;
+3. a generated form, on any host that starts rendering one.
+
+The `auto` policy is what keeps (3) honest: it does not suppress the flag until
+the page has actually reported in, so a page that never loads never costs you a
+surface. The page's own failure banner says the same thing when its host
+endpoints are unreachable.
+
+A fill pass re-reads and re-plans the route inside the same fence, so a model
+added by hand between planning and writing is never dropped: the pass refuses
+instead. Without a revision from the caller there is nothing to compare against,
+so the freshest one is used and the write proceeds.
+
 ## Applying and verifying
 
 A pass runs when the plugin mounts (`applyOnStart`), and on a config edit. There
-is no scheduled refresh; force one when you need it.
+is no scheduled refresh; force one when you need it. From any local browser
+session (`<port>` is the DSH web server):
 
-```
+```sh
 BASE=http://127.0.0.1:<port>/api/dsh-autofill-model-metadata
 
 curl -X POST $BASE/apply -H 'content-type: application/json' -d '{}'   # all routes; {"route":"my-gateway"} for one
 curl $BASE/status                                                      # mapping state, no catalog fetch
 curl $BASE/inspect                                                     # the same, resolved against the catalog
+curl "$BASE/catalog?q=gpt-5.4&limit=10"                                # candidate mapping targets
+curl -X POST $BASE/mapping -H 'content-type: application/json' \
+  -d '{"mapping":{"my-route":{"fast-model":"openai/gpt-5.4"}},"apply":true}'
 ```
 
 | endpoint | method | purpose |
@@ -209,6 +272,7 @@ curl $BASE/inspect                                                     # the sam
 | `/inspect` | GET | the route report resolved against the catalog (loads it if needed) |
 | `/catalog?q=` | GET | candidate mapping targets |
 | `/mapping` | POST | replace the whole table, `{"mapping": {...}, "apply": true}` |
+| `/page-live` | POST | the browser half reporting in; drives the `auto` policy |
 
 Every endpoint is loopback-only and answers `403` to anything else. `/mapping`
 answers `200` once the write lands, even when a requested fill is then refused:
@@ -293,3 +357,11 @@ fetch never takes a pass down: it falls back to the cache, stale or not.
 
 **Reach the catalog through a proxy or a mirror.** Point `modelsDevUrl` at it;
 `cacheTTLHours: 0` refetches on every pass.
+
+## Limitations
+
+- Reads models.dev only; no other metadata source.
+- Never invents a mapping: unmapped models stay untouched.
+- Does not touch `tool_call`, `status`, `cost`, or `compat`.
+- Applies on mount and on config edit; there is no scheduled refresh — use the
+  `apply` endpoint or restart to force one.

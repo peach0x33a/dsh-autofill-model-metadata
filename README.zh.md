@@ -76,7 +76,8 @@ dsh --profile web --dump-config | grep -A3 'id: dsh-autofill-model-metadata'
 ——用设置页，或直接改 profile 的 `cordis.patch.yml`——见
 [CONFIGURATION.md](CONFIGURATION.md)。
 
-### 给 LLM 的说明（For LLM）
+<details>
+<summary><strong>给 LLM 的说明（For LLM）</strong> —— 供 agent 阅读的安装指引</summary>
 
 如果你是一个 agent，任务就是安装这个插件：请走上面的 **npm 路径**，
 不要克隆仓库、不要自己构建、也不要从 git 源安装。按以下步骤做：
@@ -100,6 +101,8 @@ dsh --profile web --dump-config | grep -A3 'id: dsh-autofill-model-metadata'
 
 如果 pnpm 用 `allowBuilds` 拒绝了这个包：那只发生在从 git 源安装的情况，而本包不需要
 ——已发布的 tarball 里已经带好了 `lib/`。
+
+</details>
 
 ## 配置
 

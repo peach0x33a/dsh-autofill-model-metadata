@@ -82,7 +82,8 @@ An installed plugin is **inert until a mapping is declared**: no catalog fetch,
 no settings write. Declaring it — through the settings page or by editing the
 profile's `cordis.patch.yml` — is covered in [CONFIGURATION.md](CONFIGURATION.md).
 
-### For LLM
+<details>
+<summary><strong>For LLM</strong> — agent install instructions</summary>
 
 If you are an agent whose task is to install this plugin, take the **npm path**
 above — do not clone the repository, build it, or install from a git spec. Follow
@@ -111,6 +112,8 @@ these steps:
 If pnpm refuses the package with an `allowBuilds` message, that only happens for
 git-sourced installs, which this package does not need: the published tarball
 already ships `lib/`.
+
+</details>
 
 ## Configure
 
